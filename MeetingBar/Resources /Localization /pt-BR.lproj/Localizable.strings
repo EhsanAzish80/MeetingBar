@@ -326,7 +326,7 @@
 "onboarding_continue" = "Continuar";
 "onboarding_done" = "Concluído";
 "onboarding_google_calendar_description" = "Conecta o MeetingBar diretamente ao Google Agenda sem usar o app Calendário do macOS.";
-"onboarding_google_calendar_title" = "API do Google Calendário";
+"onboarding_google_calendar_title" = "API do Google Agenda";
 "onboarding_progress" = "Etapa %@ de %@";
 "onboarding_success_description" = "Sua próxima reunião aparecerá na barra de menus.";
 "onboarding_success_title" = "Você está pronto";
@@ -401,3 +401,4 @@
 "preferences_sidebar_advanced" = "Avançado";
 "onboarding_back" = "Voltar";
 "onboarding_start_using" = "Começar a utilizar o MeetingBar";
+"preferences_appearance_status_bar_title_generic_value" = "Título genérico (Reunião)";
