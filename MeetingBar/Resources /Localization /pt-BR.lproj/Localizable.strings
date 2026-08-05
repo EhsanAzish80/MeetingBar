@@ -66,7 +66,7 @@
 "preferences_appearance_events_past_title" = "Eventos passados:";
 "preferences_appearance_events_pending_title" = "Eventos pendentes";
 "preferences_appearance_events_declined_title" = "Eventos recusados:";
-"preferences_appearance_events_tentative_title" = "Eventos provisórios:";
+"preferences_appearance_events_tentative_title" = "Eventos sem confirmação:";
 "preferences_appearance_events_value_show" = "mostrar";
 "preferences_appearance_events_value_hide" = "ocultar";
 "preferences_appearance_events_value_as_inactive" = "mostrar como inativo";
