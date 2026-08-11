@@ -589,59 +589,44 @@ final class ProviderOpeningPolicyTests: BaseTestCase {
         )
     }
 
-    func test_googleMeetPWAPlanBuildsChromeArguments() {
+    func test_googleMeetPWAPlanUsesInstalledAppShim() {
         let meetURL = URL(string: "https://meet.google.com/abc-defg-hij?authuser=me")!
-        let chromeURL = URL(
-            fileURLWithPath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        )
+        let pwaURL = URL(fileURLWithPath: "/Users/test/Applications/Google Meet.app")
 
         XCTAssertEqual(
             GoogleMeetPWAOpenPolicy.plan(
                 for: meetURL,
-                chromeExecutableURL: chromeURL,
-                pwaAppID: "abcdefghijklmnopabcdefghijklmnop"
+                pwaApplicationURL: pwaURL
             ),
             GoogleMeetPWAOpenPlan(
-                executableURL: chromeURL,
-                arguments: [
-                    "--app-id=abcdefghijklmnopabcdefghijklmnop",
-                    "--app-launch-url-for-shortcuts-menu-item=\(meetURL.absoluteString)"
-                ]
+                applicationURL: pwaURL,
+                meetingURL: meetURL
             )
         )
     }
 
     func test_googleMeetPWAPlanFallsBackWhenInputOrInstallationIsUnavailable() {
         let meetURL = URL(string: "https://meet.google.com/abc-defg-hij")!
-        let chromeURL = URL(fileURLWithPath: "/Applications/Google Chrome")
+        let pwaURL = URL(fileURLWithPath: "/Users/test/Applications/Google Meet.app")
 
         XCTAssertNil(
             GoogleMeetPWAOpenPolicy.plan(
                 for: URL(string: "https://example.com/abc-defg-hij")!,
-                chromeExecutableURL: chromeURL,
-                pwaAppID: "abcdefghijklmnopabcdefghijklmnop"
+                pwaApplicationURL: pwaURL
             )
         )
         XCTAssertNil(
             GoogleMeetPWAOpenPolicy.plan(
                 for: meetURL,
-                chromeExecutableURL: nil,
-                pwaAppID: "abcdefghijklmnopabcdefghijklmnop"
-            )
-        )
-        XCTAssertNil(
-            GoogleMeetPWAOpenPolicy.plan(
-                for: meetURL,
-                chromeExecutableURL: chromeURL,
-                pwaAppID: nil
+                pwaApplicationURL: nil
             )
         )
     }
 
     func test_googleMeetPWALaunchFailureReturnsFalse() {
         let plan = GoogleMeetPWAOpenPlan(
-            executableURL: URL(fileURLWithPath: "/missing/chrome"),
-            arguments: []
+            applicationURL: URL(fileURLWithPath: "/missing/Google Meet.app"),
+            meetingURL: URL(string: "https://meet.google.com/abc-defg-hij")!
         )
 
         XCTAssertFalse(
@@ -656,8 +641,8 @@ final class ProviderOpeningPolicyTests: BaseTestCase {
         let meetURL = URL(string: "https://meet.google.com/abc-defg-hij")!
         let browser = Browser(name: "Safari", path: "/Applications/Safari.app")
         let plan = GoogleMeetPWAOpenPlan(
-            executableURL: URL(fileURLWithPath: "/Applications/Google Chrome"),
-            arguments: []
+            applicationURL: URL(fileURLWithPath: "/Applications/Google Meet.app"),
+            meetingURL: meetURL
         )
         let strategy = GoogleMeetOpenStrategy(
             pwaPlanBuilder: { _ in plan },

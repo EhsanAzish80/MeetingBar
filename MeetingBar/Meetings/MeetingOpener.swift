@@ -284,93 +284,69 @@ struct ZoomNativeOpenStrategy: MeetingOpenStrategy, Sendable {
 }
 
 struct GoogleMeetPWAOpenPlan: Equatable, Sendable {
-    let executableURL: URL
-    let arguments: [String]
+    let applicationURL: URL
+    let meetingURL: URL
 }
 
 enum GoogleMeetPWAOpenPolicy {
     static func plan(
         for url: URL,
-        chromeExecutableURL: URL?,
-        pwaAppID: String?
+        pwaApplicationURL: URL?
     ) -> GoogleMeetPWAOpenPlan? {
         guard url.scheme == "https",
               url.host?.lowercased() == "meet.google.com",
               url.pathComponents.count >= 2,
-              let chromeExecutableURL,
-              let pwaAppID,
-              pwaAppID.count == 32,
-              pwaAppID.allSatisfy({ ("a" ... "p").contains($0) })
+              let pwaApplicationURL
         else { return nil }
 
         return GoogleMeetPWAOpenPlan(
-            executableURL: chromeExecutableURL,
-            arguments: [
-                "--app-id=\(pwaAppID)",
-                "--app-launch-url-for-shortcuts-menu-item=\(url.absoluteString)"
-            ]
+            applicationURL: pwaApplicationURL,
+            meetingURL: url
         )
     }
 }
 
 enum GoogleMeetPWAInstallation {
-    static func chromeExecutableURL(
-        fileManager: FileManager = .default
-    ) -> URL? {
-        let home = fileManager.homeDirectoryForCurrentUser
-        let candidates = [
-            URL(fileURLWithPath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-            home.appendingPathComponent(
-                "Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-        ]
-        return candidates.first { fileManager.isExecutableFile(atPath: $0.path) }
-    }
+    private static let bundleIdentifier =
+        "com.google.Chrome.app.kjgfgldnnfoeklkmfkjfagphfepbbdan"
 
-    static func appID(fileManager: FileManager = .default) -> String? {
-        let home = fileManager.homeDirectoryForCurrentUser
-        let candidates = [
-            home.appendingPathComponent(
-                "Applications/Chrome Apps.localized/Google Meet.app"),
-            home.appendingPathComponent(
-                "Applications/Chrome Apps/Google Meet.app"),
-            URL(fileURLWithPath: "/Applications/Chrome Apps.localized/Google Meet.app"),
-            URL(fileURLWithPath: "/Applications/Chrome Apps/Google Meet.app")
-        ]
-
-        for appURL in candidates where fileManager.fileExists(atPath: appURL.path) {
-            if let appID = Bundle(url: appURL)?
-                .object(forInfoDictionaryKey: "CrAppModeShortcutID") as? String,
-               !appID.isEmpty {
-                return appID
-            }
-        }
-        return nil
+    static func applicationURL() -> URL? {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
     }
 }
 
 enum GoogleMeetPWALauncher {
     static func launch(_ plan: GoogleMeetPWAOpenPlan) -> Bool {
-        launch(plan, processRunner: runProcess)
+        openApplication(plan)
+        return true
     }
 
     static func launch(
         _ plan: GoogleMeetPWAOpenPlan,
-        processRunner: (GoogleMeetPWAOpenPlan) throws -> Void
+        applicationOpener: (GoogleMeetPWAOpenPlan) throws -> Void
     ) -> Bool {
         do {
-            try processRunner(plan)
+            try applicationOpener(plan)
             return true
         } catch {
-            AppMessageCenter.shared.post(.browserUnavailable(name: "Google Chrome"))
+            AppMessageCenter.shared.post(.browserUnavailable(name: "Google Meet"))
             return false
         }
     }
 
-    private static func runProcess(_ plan: GoogleMeetPWAOpenPlan) throws {
-        let process = Process()
-        process.executableURL = plan.executableURL
-        process.arguments = plan.arguments
-        try process.run()
+    private static func openApplication(_ plan: GoogleMeetPWAOpenPlan) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.addsToRecentItems = true
+        NSWorkspace.shared.open(
+            [plan.meetingURL],
+            withApplicationAt: plan.applicationURL,
+            configuration: configuration
+        ) { application, error in
+            if application == nil || error != nil {
+                AppMessageCenter.shared.post(.browserUnavailable(name: "Google Meet"))
+            }
+        }
     }
 }
 
@@ -386,8 +362,7 @@ struct GoogleMeetOpenStrategy: MeetingOpenStrategy, Sendable {
         pwaPlanBuilder: @escaping @Sendable (URL) -> GoogleMeetPWAOpenPlan? = {
             GoogleMeetPWAOpenPolicy.plan(
                 for: $0,
-                chromeExecutableURL: GoogleMeetPWAInstallation.chromeExecutableURL(),
-                pwaAppID: GoogleMeetPWAInstallation.appID()
+                pwaApplicationURL: GoogleMeetPWAInstallation.applicationURL()
             )
         },
         pwaLauncher: @escaping @Sendable (GoogleMeetPWAOpenPlan) -> Bool = {
