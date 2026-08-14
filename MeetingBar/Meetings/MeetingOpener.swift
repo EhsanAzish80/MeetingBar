@@ -316,37 +316,51 @@ enum GoogleMeetPWAInstallation {
 }
 
 enum GoogleMeetPWALauncher {
-    static func launch(_ plan: GoogleMeetPWAOpenPlan) -> Bool {
-        openApplication(plan)
-        return true
+    typealias Completion = @Sendable (Bool) -> Void
+    typealias ApplicationOpener = @Sendable (
+        GoogleMeetPWAOpenPlan,
+        @escaping @Sendable (NSRunningApplication?, Error?) -> Void
+    ) -> Void
+
+    static func launch(
+        _ plan: GoogleMeetPWAOpenPlan,
+        completion: @escaping Completion
+    ) {
+        launch(plan, applicationOpener: openApplication, completion: completion)
     }
 
     static func launch(
         _ plan: GoogleMeetPWAOpenPlan,
-        applicationOpener: (GoogleMeetPWAOpenPlan) throws -> Void
-    ) -> Bool {
-        do {
-            try applicationOpener(plan)
-            return true
-        } catch {
-            AppMessageCenter.shared.post(.browserUnavailable(name: "Google Meet"))
-            return false
+        applicationOpener: @escaping ApplicationOpener,
+        completion: @escaping Completion
+    ) {
+        applicationOpener(plan) { application, error in
+            let didLaunch = application != nil && error == nil
+            if !didLaunch {
+                AppMessageCenter.shared.post(.browserUnavailable(name: "Google Meet"))
+            }
+            completion(didLaunch)
         }
     }
 
-    private static func openApplication(_ plan: GoogleMeetPWAOpenPlan) {
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = true
-        configuration.addsToRecentItems = true
+    private static func openApplication(
+        _ plan: GoogleMeetPWAOpenPlan,
+        completion: @escaping @Sendable (NSRunningApplication?, Error?) -> Void
+    ) {
+        let configuration = openConfiguration()
         NSWorkspace.shared.open(
             [plan.meetingURL],
             withApplicationAt: plan.applicationURL,
-            configuration: configuration
-        ) { application, error in
-            if application == nil || error != nil {
-                AppMessageCenter.shared.post(.browserUnavailable(name: "Google Meet"))
-            }
-        }
+            configuration: configuration,
+            completionHandler: completion
+        )
+    }
+
+    static func openConfiguration() -> NSWorkspace.OpenConfiguration {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.addsToRecentItems = false
+        return configuration
     }
 }
 
@@ -354,7 +368,10 @@ enum GoogleMeetPWALauncher {
 /// installed Chrome Google Meet PWA.
 struct GoogleMeetOpenStrategy: MeetingOpenStrategy, Sendable {
     private let pwaPlanBuilder: @Sendable (URL) -> GoogleMeetPWAOpenPlan?
-    private let pwaLauncher: @Sendable (GoogleMeetPWAOpenPlan) -> Bool
+    private let pwaLauncher: @Sendable (
+        GoogleMeetPWAOpenPlan,
+        @escaping GoogleMeetPWALauncher.Completion
+    ) -> Void
     private let browserOpener: @Sendable (URL, Browser) -> Void
     private let defaultOpener: @Sendable (URL) -> Void
 
@@ -365,8 +382,11 @@ struct GoogleMeetOpenStrategy: MeetingOpenStrategy, Sendable {
                 pwaApplicationURL: GoogleMeetPWAInstallation.applicationURL()
             )
         },
-        pwaLauncher: @escaping @Sendable (GoogleMeetPWAOpenPlan) -> Bool = {
-            GoogleMeetPWALauncher.launch($0)
+        pwaLauncher: @escaping @Sendable (
+            GoogleMeetPWAOpenPlan,
+            @escaping GoogleMeetPWALauncher.Completion
+        ) -> Void = {
+            GoogleMeetPWALauncher.launch($0, completion: $1)
         },
         browserOpener: @escaping @Sendable (URL, Browser) -> Void = {
             $0.openIn(browser: $1)
@@ -391,9 +411,14 @@ struct GoogleMeetOpenStrategy: MeetingOpenStrategy, Sendable {
             let meetInOneURL = URL(string: "meetinone://url=" + url.absoluteString)!
             defaultOpener(meetInOneURL)
         case .googleMeetPWA:
-            guard let plan = pwaPlanBuilder(url), pwaLauncher(plan) else {
+            guard let plan = pwaPlanBuilder(url) else {
                 browserOpener(url, opening.browser)
                 return
+            }
+            pwaLauncher(plan) { didLaunch in
+                if !didLaunch {
+                    browserOpener(url, opening.browser)
+                }
             }
         case .zoomApp, .zoomWebApp, .teamsApp, .workplaceApp, .jitsiApp,
              .slackApp, .riversideApp, nil:
